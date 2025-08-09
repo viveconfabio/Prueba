@@ -1,0 +1,11 @@
+{
+  "app": {
+    "title": "Reservation Dashboard",
+    "dashboard": "Dashboard",
+    "reservations": "Reservations",
+    "calendar": "Calendar",
+    "customers": "Customers",
+    "newReservation": "New Reservation",
+    "aiAssistant": "AI Assistant"
+  }
+}

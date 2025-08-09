@@ -1,0 +1,11 @@
+{
+  "app": {
+    "title": "Panel de Reservas",
+    "dashboard": "Inicio",
+    "reservations": "Reservas",
+    "calendar": "Calendario",
+    "customers": "Clientes",
+    "newReservation": "Nueva Reserva",
+    "aiAssistant": "Asistente IA"
+  }
+}

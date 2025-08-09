@@ -1,0 +1,207 @@
+// Prisma schema for the reservation system
+// Use PostgreSQL in production. For local dev, you can use Postgres or SQLite (for quick testing).
+datasource db {
+  provider = env("DB_PROVIDER") // "postgresql" recommended for production
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  NO_SHOW
+  COMPLETED
+}
+
+enum CancellationType {
+  CUSTOMER
+  RESTAURANT
+  SYSTEM
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  REQUIRED
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  image     String?
+  role      Role     @default(STAFF)
+  // NextAuth
+  accounts  Account[]
+  sessions  Session[]
+  // Ownership / employment
+  restaurants Restaurant[] @relation("RestaurantUsers")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Restaurant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("UTC")
+  phone     String?
+  address   String?
+  users     User[]   @relation("RestaurantUsers")
+  tables    Table[]
+  reservations Reservation[]
+  availabilityRules AvailabilityRule[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Table {
+  id           String   @id @default(cuid())
+  name         String
+  capacity     Int
+  isActive     Boolean  @default(true)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CustomerProfile {
+  id            String   @id @default(cuid())
+  name          String
+  email         String?
+  phone         String?
+  totalBookings Int      @default(0)
+  totalSpent    Int      @default(0) // in cents
+  reservations  Reservation[]
+  cancellationLogs CancellationLog[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Reservation {
+  id            String        @id @default(cuid())
+  restaurantId  String
+  restaurant    Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  customerId    String
+  customer      CustomerProfile @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  tableId       String?
+  table         Table?        @relation(fields: [tableId], references: [id])
+  partySize     Int
+  startTime     DateTime
+  endTime       DateTime
+  notes         String?
+  status        BookingStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(NOT_REQUIRED)
+  paymentRequired Boolean     @default(false)
+  depositAmount Int?
+  paymentRecords PaymentRecord[]
+  cancellationLog CancellationLog?
+  createdByUserId String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([restaurantId, startTime])
+  @@index([customerId, status])
+}
+
+model AvailabilityRule {
+  id           String   @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  dayOfWeek    Int      // 0 (Sun) - 6 (Sat)
+  openTime     String   // "10:00"
+  closeTime    String   // "22:00"
+  intervalMin  Int      @default(15)
+  isOpen       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model PaymentRecord {
+  id             String   @id @default(cuid())
+  reservationId  String
+  reservation    Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  provider       String   // "stripe" | "paypal"
+  providerRef    String
+  amount         Int      // cents
+  currency       String   @default("usd")
+  status         PaymentStatus
+  createdAt      DateTime @default(now())
+}
+
+model CancellationLog {
+  id               String   @id @default(cuid())
+  reservationId    String   @unique
+  reservation      Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  reason           String?
+  type             CancellationType
+  cancelledAt      DateTime @default(now())
+  token            String   @unique // used for self-service cancellation link
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  segment     String   // e.g., "loyal_customers", "frequent_cancellers", etc.
+  subject     String
+  bodyHtml    String
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  createdById String?
+  createdAt   DateTime @default(now())
+}
